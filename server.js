@@ -14,21 +14,37 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Create transporter for Gmail
+// ────────────────────────────────────────────────
+// Explicit Gmail SMTP configuration (recommended over "service: 'gmail'")
+// This style is more reliable in production/container environments
+// ────────────────────────────────────────────────
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false,           // false for STARTTLS (port 587), true would be for 465
+  requireTLS: true,        // enforce STARTTLS
+  tls: {
+    // Do NOT reject self-signed certs in production (sometimes helps with strange environments)
+    rejectUnauthorized: false,
+  },
   auth: {
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  }
+    pass: process.env.EMAIL_PASS, // must be App Password if 2FA is on
+  },
+  // Increase timeouts slightly (Render cold starts + network can be slower)
+  connectionTimeout: 30000,   // 30s
+  greetingTimeout: 30000,
+  socketTimeout: 60000,
+  debug: true,                // ← very helpful when troubleshooting
+  logger: true,
 });
 
-// Test email configuration
+// Verify connection (runs on startup)
 transporter.verify((error, success) => {
   if (error) {
-    console.log('Email server connection error:', error);
+    console.error('Email transporter verification failed:', error);
   } else {
-    console.log('Email server is ready to send messages');
+    console.log('Email transporter is ready to send messages');
   }
 });
 
@@ -45,7 +61,7 @@ app.post('/api/send-email', async (req, res) => {
       });
     }
 
-    // Validate email format
+    // Basic email format check
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return res.status(400).json({
@@ -54,7 +70,7 @@ app.post('/api/send-email', async (req, res) => {
       });
     }
 
-    // Email options
+    // Email content
     const mailOptions = {
       from: process.env.EMAIL_USER,
       to: 'ahtashamahsan988@gmail.com',
@@ -87,10 +103,10 @@ This message was sent through your portfolio contact form.
       `
     };
 
-    // Send email
+    // Send the email
     const info = await transporter.sendMail(mailOptions);
 
-    console.log('Email sent successfully:', info.messageId);
+    console.log('Email sent successfully → Message ID:', info.messageId);
 
     res.status(200).json({
       success: true,
@@ -100,7 +116,7 @@ This message was sent through your portfolio contact form.
 
   } catch (error) {
     console.error('Error sending email:', error);
-    
+
     res.status(500).json({
       success: false,
       message: 'Failed to send message. Please try again later.',
