@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend'); // New: Resend SDK for HTTP-based email
 const dotenv = require('dotenv');
 
 // Load environment variables from .env file
@@ -15,44 +15,17 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // ────────────────────────────────────────────────
-// Transporter config: Explicit SMTP settings for Gmail (STARTTLS on 587)
-// Note: On Render FREE tier, outbound port 587 (and 465) is BLOCKED since Sep 2025
-// → This will timeout on free instances. Upgrade to paid plan OR switch to API-based email service
+// Resend client initialization (HTTP API - no SMTP ports involved)
+// Works on Render free tier since it uses HTTPS (port 443)
 // ────────────────────────────────────────────────
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false,                  // false = use STARTTLS (not implicit TLS)
-  requireTLS: true,               // Force STARTTLS upgrade
-  tls: {
-    // In some container envs, helps with cert issues (safe for known Gmail host)
-    rejectUnauthorized: false,
-  },
-  auth: {
-    user: process.env.EMAIL_USER,     // your@gmail.com
-    pass: process.env.EMAIL_PASS      // App Password (NOT regular password if 2FA on)
-  },
-  // Timeouts tuned for cloud env (Render can be slower on cold starts)
-  connectionTimeout: 30000,   // 30 seconds
-  greetingTimeout: 30000,
-  socketTimeout: 60000,
-  // Enable detailed logging for troubleshooting
-  debug: true,
-  logger: true,
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-// Verify transporter on startup (logs helpful info / errors)
-transporter.verify((error, success) => {
-  if (error) {
-    console.error('Transporter verification failed (likely due to Render free tier SMTP block):', error);
-  } else {
-    console.log('Transporter ready (SMTP config looks good locally)');
-  }
-});
+// Optional: Log if API key is missing (helps debugging)
+if (!process.env.RESEND_API_KEY) {
+  console.error('Missing RESEND_API_KEY environment variable - email sending will fail');
+}
 
-// ────────────────────────────────────────────────
-// POST /api/send-email endpoint
-// ────────────────────────────────────────────────
+// Email sending endpoint - now using Resend instead of Nodemailer/SMTP
 app.post('/api/send-email', async (req, res) => {
   try {
     const { name, email, subject, message } = req.body;
@@ -73,10 +46,10 @@ app.post('/api/send-email', async (req, res) => {
       });
     }
 
-    // Mail options
-    const mailOptions = {
-      from: `"Portfolio Contact" <${process.env.EMAIL_USER}>`,
-      to: 'ahtashamahsan988@gmail.com',
+    // Send email via Resend API
+    const { data, error } = await resend.emails.send({
+      from: 'Portfolio Contact <onboarding@resend.dev>', // Use your verified sender or default test one
+      to: ['ahtashamahsan988@gmail.com'], // Your receiving email
       subject: `Portfolio Contact: ${subject}`,
       text: `
 New message from your portfolio website:
@@ -103,37 +76,35 @@ Sent via portfolio contact form.
           <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
           <p style="color: #666; font-size: 12px;">This message was sent through your portfolio contact form.</p>
         </div>
-      `
-    };
+      `,
+      // Optional: replyTo: email  // Lets you reply directly to the sender
+    });
 
-    // Attempt to send
-    const info = await transporter.sendMail(mailOptions);
+    if (error) {
+      console.error('Resend API error:', error);
+      throw new Error(error.message || 'Resend failed to send email');
+    }
 
-    console.log('Email sent → Message ID:', info.messageId);
+    console.log('Email sent via Resend → ID:', data.id);
 
     res.status(200).json({
       success: true,
       message: 'Message sent successfully!',
-      messageId: info.messageId
+      messageId: data.id
     });
 
   } catch (error) {
     console.error('Error sending email:', error);
 
-    // Render-specific hint in response for easier debugging
-    const errorMessage = error.code === 'ETIMEDOUT' && error.command === 'CONN'
-      ? 'Connection timeout - likely Render free tier blocking SMTP port 587. Upgrade plan or switch to email API (Resend/SendGrid/Brevo).'
-      : error.message;
-
     res.status(500).json({
       success: false,
       message: 'Failed to send message. Please try again later.',
-      error: errorMessage
+      error: error.message
     });
   }
 });
 
-// Health check
+// Health check endpoint
 app.get('/api/health', (req, res) => {
   res.status(200).json({
     status: 'ok',
