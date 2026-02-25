@@ -58,6 +58,7 @@ The server will run on `http://localhost:3000`
 Send an email from the portfolio contact form.
 
 **Request Body:**
+
 ```json
 {
   "name": "John Doe",
@@ -68,6 +69,7 @@ Send an email from the portfolio contact form.
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -81,6 +83,7 @@ Send an email from the portfolio contact form.
 Check if the API is running.
 
 **Response:**
+
 ```json
 {
   "status": "ok",
@@ -101,11 +104,11 @@ const sendEmail = async (formData) => {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(formData)
+      body: JSON.stringify(formData),
     });
 
     const result = await response.json();
-    
+
     if (result.success) {
       alert('Message sent successfully!');
     } else {

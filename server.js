@@ -22,7 +22,9 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Optional: Log if API key is missing (helps debugging)
 if (!process.env.RESEND_API_KEY) {
-  console.error('Missing RESEND_API_KEY environment variable - email sending will fail');
+  console.error(
+    'Missing RESEND_API_KEY environment variable - email sending will fail'
+  );
 }
 
 // Email sending endpoint - now using Resend instead of Nodemailer/SMTP
@@ -34,7 +36,7 @@ app.post('/api/send-email', async (req, res) => {
     if (!name || !email || !subject || !message) {
       return res.status(400).json({
         success: false,
-        message: 'All fields are required: name, email, subject, message'
+        message: 'All fields are required: name, email, subject, message',
       });
     }
 
@@ -42,7 +44,7 @@ app.post('/api/send-email', async (req, res) => {
     if (!emailRegex.test(email)) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide a valid email address'
+        message: 'Please provide a valid email address',
       });
     }
 
@@ -90,16 +92,15 @@ Sent via portfolio contact form.
     res.status(200).json({
       success: true,
       message: 'Message sent successfully!',
-      messageId: data.id
+      messageId: data.id,
     });
-
   } catch (error) {
     console.error('Error sending email:', error);
 
     res.status(500).json({
       success: false,
       message: 'Failed to send message. Please try again later.',
-      error: error.message
+      error: error.message,
     });
   }
 });
@@ -108,7 +109,7 @@ Sent via portfolio contact form.
 app.get('/api/health', (req, res) => {
   res.status(200).json({
     status: 'ok',
-    message: 'Portfolio Email API is running'
+    message: 'Portfolio Email API is running',
   });
 });
 
